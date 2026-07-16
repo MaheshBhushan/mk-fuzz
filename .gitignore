@@ -1,0 +1,6 @@
+build/
+out/
+out_zlib/
+symbolic/venv/
+*.o
+.cur_input
