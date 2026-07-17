@@ -1,5 +1,10 @@
 # mk-fuzz
 
+![Language: C](https://img.shields.io/badge/language-C-00599C?logo=c)
+![Symbolic: Z3](https://img.shields.io/badge/symbolic-Z3-8A2BE2)
+![Instrumentation: clang SanitizerCoverage](https://img.shields.io/badge/instrumentation-clang%20trace--pc--guard-orange?logo=llvm)
+![Platform: Linux](https://img.shields.io/badge/platform-Linux-333?logo=linux&logoColor=white)
+
 A coverage-guided, AFL-style fuzzer with a Z3-backed **baby symbolic executor**
 bolted on to crack the branches fuzzing can't reach. Written from scratch in C
 (the fuzzer + coverage/fork-server runtime) and Python (the symbolic engine).
