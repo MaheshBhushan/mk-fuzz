@@ -4,3 +4,10 @@ out_zlib/
 symbolic/venv/
 *.o
 .cur_input
+third_party/zlib/
+third_party/zlib.tar.gz
+third_party/cjson/
+# Benchmark artifacts: the summary, the plot and the small per-run CSV/JSON are
+# committed as evidence. The bug gate's saved crash corpora are not.
+results/buggate/
+results_smoke/

@@ -1,0 +1,5 @@
+{"summary":true,"scheduler":"linucb","seed":2,"target":"build/cjson_target_bench","execs":30000,"t_ms":12532,"edges":319,"corpus":345,"crashes":0,"hangs":0,"tv_early_vs_late":0.06578,"tv_early_vs_all":0.06295,"tv_early_vs_posterior":0.06448,"tv_vs_handweights":0.14360,
+ "op_share_early":{"bitflip":0.11418,"byteset":0.09953,"byteadd":0.10655,"int8":0.09227,"int16":0.10841,"int32":0.10711,"delete":0.14840,"clone":0.13157,"memset":0.09199},
+ "op_share_late":{"bitflip":0.11259,"byteset":0.11194,"byteadd":0.11091,"int8":0.11110,"int16":0.10785,"int32":0.11552,"delete":0.10692,"clone":0.10943,"memset":0.11375},
+ "op_share_all":{"bitflip":0.11116,"byteset":0.11066,"byteadd":0.11186,"int8":0.11072,"int16":0.11060,"int32":0.11135,"delete":0.10739,"clone":0.11265,"memset":0.11361},
+ "op_posterior_mean":{"bitflip":0.11153,"byteset":0.11225,"byteadd":0.11292,"int8":0.11333,"int16":0.11029,"int32":0.10943,"delete":0.10781,"clone":0.11034,"memset":0.11211}}

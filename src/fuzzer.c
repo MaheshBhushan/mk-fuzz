@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <math.h>
 #include <errno.h>
 #include <signal.h>
 #include <dirent.h>
@@ -24,6 +25,8 @@
 #include <sys/stat.h>
 
 #include "rt.h"
+#include "sched.h"
+#include "trace.h"
 
 #define MK_MAX_INPUT (1 << 20)      /* 1 MiB, matches the runtime cap */
 #define EXEC_TIMEOUT_MS 1000     /* per-run wall clock budget */
@@ -59,15 +62,20 @@ static void classify_counts(uint8_t *m) {
 /* Did this run light up a byte we've never seen at this bucket before?
  * Returns 2 for a brand-new edge, 1 for a new hit-count bucket, 0 otherwise.
  * Updates virgin_bits so future runs only report genuinely new coverage. */
-static int has_new_bits(void) {
+static uint32_t edges_found;   /* bytes of virgin_bits touched at least once */
+
+static int has_new_bits(uint32_t *n_edges, uint32_t *n_buckets) {
     int ret = 0;
+    uint32_t ne = 0, nb = 0;
     for (uint32_t i = 0; i < MAP_SIZE; i++) {
         if (trace_bits[i] && (trace_bits[i] & virgin_bits[i])) {
-            if (ret < 2)
-                ret = (virgin_bits[i] == 0xff) ? 2 : 1;
+            if (virgin_bits[i] == 0xff) { ne++; edges_found++; if (ret < 2) ret = 2; }
+            else                        { nb++; if (ret < 1) ret = 1; }
             virgin_bits[i] &= ~trace_bits[i];
         }
     }
+    if (n_edges)   *n_edges = ne;
+    if (n_buckets) *n_buckets = nb;
     return ret;
 }
 
@@ -182,6 +190,8 @@ static void corpus_add(const uint8_t *data, size_t len) {
 
 /* ---- mutation ---------------------------------------------------------- */
 
+/* One shared stream. -s <seed> replaces the constant; the default is the
+ * original hardcoded value, so an unflagged run reproduces exactly. */
 static uint64_t rng_state = 0x2545F4914F6CDD1DULL;
 static uint64_t rnd(void) { /* xorshift64* */
     uint64_t x = rng_state;
@@ -191,43 +201,53 @@ static uint64_t rnd(void) { /* xorshift64* */
 }
 static uint32_t rnd_below(uint32_t n) { return n ? (uint32_t)(rnd() % n) : 0; }
 
+/* The scheduler draws from the same stream (see sched.h). */
+uint64_t mk_rnd(void) { return rnd(); }
+uint32_t mk_rnd_below(uint32_t n) { return rnd_below(n); }
+
 static const int8_t  interesting_8[]  = { -128, -1, 0, 1, 16, 32, 64, 100, 127 };
 static const int16_t interesting_16[] = { -32768, -1, 0, 1, 16, 128, 255, 256,
                                           512, 1000, 4096, 32767 };
 static const int32_t interesting_32[] = { -2147483647-1, -100000, -1, 0, 1,
                                           256, 65535, 65536, 100000, 2147483647 };
 
-/* Stacked "havoc" mutations. Returns the new length. buf has MK_MAX_INPUT room. */
-static size_t mutate(uint8_t *buf, size_t len) {
+/* Stacked "havoc" mutations. Returns the new length. buf has MK_MAX_INPUT room.
+ * op_counts[] is filled in with how many of the stacked edits each operator
+ * contributed, which is what the scheduler is rewarded on. */
+static size_t mutate(uint8_t *buf, size_t len, const SchedCtx *ctx,
+                     uint32_t *op_counts, uint32_t *total_edits) {
     int rounds = 1 << (1 + rnd_below(6)); /* 2..64 stacked edits */
+    *total_edits = 0;
     for (int r = 0; r < rounds; r++) {
-        switch (rnd_below(11)) {
-        case 0: /* bit flip */
+        int op = sched_pick(ctx);
+        op_counts[op]++; (*total_edits)++;
+        switch (op) {
+        case OP_BITFLIP: /* bit flip */
             if (len) buf[rnd_below(len)] ^= 1 << rnd_below(8);
             break;
-        case 1: /* random byte set */
+        case OP_BYTESET: /* random byte set */
             if (len) buf[rnd_below(len)] = (uint8_t)rnd();
             break;
-        case 2: /* byte add/sub */
+        case OP_BYTEADD: /* byte add/sub */
             if (len) buf[rnd_below(len)] += (uint8_t)(rnd_below(70) - 35);
             break;
-        case 3: /* interesting 8 */
+        case OP_INT8: /* interesting 8 */
             if (len) buf[rnd_below(len)] =
                 interesting_8[rnd_below(sizeof interesting_8)];
             break;
-        case 4: /* interesting 16 */
+        case OP_INT16: /* interesting 16 */
             if (len >= 2) {
                 int16_t v = interesting_16[rnd_below(sizeof interesting_16 / 2)];
                 memcpy(buf + rnd_below(len - 1), &v, 2);
             }
             break;
-        case 5: /* interesting 32 */
+        case OP_INT32: /* interesting 32 */
             if (len >= 4) {
                 int32_t v = interesting_32[rnd_below(sizeof interesting_32 / 4)];
                 memcpy(buf + rnd_below(len - 3), &v, 4);
             }
             break;
-        case 6: case 7: /* delete a chunk */
+        case OP_DELETE: /* delete a chunk */
             if (len > 1) {
                 uint32_t n = 1 + rnd_below(len / 2);
                 uint32_t at = rnd_below(len - n + 1);
@@ -235,7 +255,7 @@ static size_t mutate(uint8_t *buf, size_t len) {
                 len -= n;
             }
             break;
-        case 8: case 9: /* clone/insert a chunk */
+        case OP_CLONE: /* clone/insert a chunk */
             if (len && len < MK_MAX_INPUT - 128) {
                 uint32_t n = 1 + rnd_below(len < 64 ? len : 64);
                 uint32_t from = rnd_below(len);
@@ -246,7 +266,7 @@ static size_t mutate(uint8_t *buf, size_t len) {
                 len += n;
             }
             break;
-        case 10: /* overwrite with a constant byte */
+        case OP_MEMSET: /* overwrite with a constant byte */
             if (len) {
                 uint32_t n = 1 + rnd_below(len);
                 uint32_t at = rnd_below(len - n + 1);
@@ -303,7 +323,7 @@ static void load_seeds(const char *dir) {
         if (n < 0) n = 0;
         run_target(buf, n);              /* prime coverage from the seed */
         classify_counts(trace_bits);
-        has_new_bits();
+        has_new_bits(NULL, NULL);
         corpus_add(buf, n);
     }
     free(buf);
@@ -316,6 +336,8 @@ static uint64_t now_ms(void) {
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+/* Kept as the audit path for the incremental edges_found counter: sweeping
+ * 64 KiB once per UI tick was fine, once per execution is not. */
 static uint32_t count_nonzero_virgin(void) {
     uint32_t c = 0;
     for (uint32_t i = 0; i < MAP_SIZE; i++) if (virgin_bits[i] != 0xff) c++;
@@ -325,18 +347,60 @@ static uint32_t count_nonzero_virgin(void) {
 int main(int argc, char **argv) {
     const char *seed_dir = NULL;
     const char *o = NULL;
+    const char *trace_path = NULL, *cov_path = NULL;
+    uint64_t max_execs = 0, max_secs = 0, cov_every = 1000;
+    unsigned seed = 0;            /* 0 = keep the original hardcoded state */
+    SchedKind sched = SCHED_BASELINE;
     int i = 1;
     for (; i < argc; i++) {
         if (!strcmp(argv[i], "-i") && i + 1 < argc) seed_dir = argv[++i];
         else if (!strcmp(argv[i], "-o") && i + 1 < argc) o = argv[++i];
+        else if (!strncmp(argv[i], "--scheduler=", 12)) {
+            sched = sched_parse(argv[i] + 12);
+            if (sched == SCHED_UNKNOWN) {
+                fprintf(stderr, "mk-fuzz: unknown scheduler '%s' "
+                        "(want baseline|bandit|linucb)\n", argv[i] + 12);
+                return 1;
+            }
+        }
+        else if (!strcmp(argv[i], "--scheduler") && i + 1 < argc) {
+            sched = sched_parse(argv[++i]);
+            if (sched == SCHED_UNKNOWN) {
+                fprintf(stderr, "mk-fuzz: unknown scheduler '%s' "
+                        "(want baseline|bandit|linucb)\n", argv[i]);
+                return 1;
+            }
+        }
+        else if (!strcmp(argv[i], "-s") && i + 1 < argc) seed = (unsigned)strtoul(argv[++i], NULL, 10);
+        else if (!strcmp(argv[i], "-E") && i + 1 < argc) max_execs = strtoull(argv[++i], NULL, 10);
+        else if (!strcmp(argv[i], "-T") && i + 1 < argc) max_secs = strtoull(argv[++i], NULL, 10);
+        else if (!strcmp(argv[i], "--trace") && i + 1 < argc) trace_path = argv[++i];
+        else if (!strcmp(argv[i], "--cov") && i + 1 < argc) cov_path = argv[++i];
+        else if (!strcmp(argv[i], "--cov-every") && i + 1 < argc) cov_every = strtoull(argv[++i], NULL, 10);
         else if (!strcmp(argv[i], "--")) { i++; break; }
         else { fprintf(stderr, "unknown arg: %s\n", argv[i]); return 1; }
     }
     if (!seed_dir || !o || i >= argc) {
         fprintf(stderr,
-            "usage: %s -i <seed_dir> -o <out_dir> -- ./target [args]\n", argv[0]);
+            "usage: %s [options] -i <seed_dir> -o <out_dir> -- ./target [args]\n"
+            "\n"
+            "  --scheduler=baseline|bandit|linucb   mutation-operator scheduler\n"
+            "                                       (default baseline: the original\n"
+            "                                        hand-weighted distribution)\n"
+            "  -s <n>              RNG seed (default: the original fixed state)\n"
+            "  -E <n>              stop after n executions (default: never)\n"
+            "  -T <secs>           stop after secs seconds (default: never)\n"
+            "  --trace <path>      JSONL, one row per mutation\n"
+            "  --cov <path>        CSV coverage curve\n"
+            "  --cov-every <n>     CSV sampling interval (default 1000 execs)\n",
+            argv[0]);
         return 1;
     }
+    if (seed) {
+        rng_state = 0x9E3779B97F4A7C15ULL * (uint64_t)seed + 0x2545F4914F6CDD1DULL;
+        if (!rng_state) rng_state = 0x2545F4914F6CDD1DULL;  /* xorshift dies at 0 */
+    }
+    sched_init(sched);
     target_argv = &argv[i];
     snprintf(out_dir, sizeof out_dir, "%s", o);
 
@@ -358,11 +422,24 @@ int main(int argc, char **argv) {
     start_forkserver();
     load_seeds(seed_dir);
 
-    fprintf(stderr, "mk-fuzz: %zu seed(s), %u edges from seeds. fuzzing %s ...\n",
-            corpus_len, count_nonzero_virgin(), target_argv[0]);
+    edges_found = count_nonzero_virgin();   /* prime the incremental counter */
+
+    trace_open(trace_path, cov_path, cov_every, sched_name(sched), seed,
+               target_argv[0]);
+
+    fprintf(stderr, "mk-fuzz: %zu seed(s), %u edges from seeds. "
+                    "scheduler=%s seed=%u. fuzzing %s ...\n",
+            corpus_len, edges_found, sched_name(sched), seed, target_argv[0]);
 
     uint8_t *buf = malloc(MK_MAX_INPUT);
     uint64_t start = now_ms(), last_ui = 0, execs = 0;
+
+    /* Recent-hit-rate feature: a 256-execution sliding window of "did this
+     * execution find any coverage", kept as a ring so the feature costs nothing. */
+    uint8_t hit_ring[256] = {0};
+    uint32_t hit_ring_pos = 0, hit_ring_sum = 0;
+
+    SchedCtx ctx = {0};
 
     while (1) {
         Testcase *tc = &corpus[rnd_below(corpus_len)];
@@ -370,12 +447,26 @@ int main(int argc, char **argv) {
         memcpy(buf, tc->data, len);
 
         if (corpus_len > 1 && rnd_below(20) == 0) len = splice(buf, len);
-        len = mutate(buf, len);
+
+        /* Context for this execution. All four features are reads of state the
+         * loop already maintains, log-compressed into roughly [0,1] so LinUCB's
+         * ridge regression sees comparable magnitudes. */
+        ctx.cov_sat    = log2(1.0 + edges_found) / (double)MAP_SIZE_POW2;
+        ctx.frontier   = log2(1.0 + (double)corpus_len) / 16.0;
+        ctx.hit_rate   = (double)hit_ring_sum / 256.0;
+        ctx.size_class = log2(1.0 + (double)len) / 20.0;
+
+        uint32_t op_counts[OP_COUNT] = {0}, total_edits = 0;
+        len = mutate(buf, len, &ctx, op_counts, &total_edits);
 
         int res = run_target(buf, len);
         execs++;
 
+        uint32_t new_edges = 0, new_buckets = 0;
+        const char *res_name = "ok";
+
         if (res == RUN_CRASH) {
+            res_name = "crash";
             /* Deduplicate: only save if the crash covers a new edge. */
             classify_counts(trace_bits);
             int novel = 0;
@@ -389,26 +480,56 @@ int main(int argc, char **argv) {
                         crash_count, len);
             }
         } else if (res == RUN_HANG) {
+            res_name = "hang";
             if (hang_count < 50) save_case("hangs", &hang_count, buf, len);
             else hang_count++;
         } else {
             classify_counts(trace_bits);
-            if (has_new_bits()) {
+            if (has_new_bits(&new_edges, &new_buckets)) {
                 corpus_add(buf, len);
                 save_case("queue", &queue_count, buf, len);
             }
         }
 
+        /* Reward: newly covered edges, with a small consolation for reaching a
+         * new hit-count bucket on an edge we already had. Clipped to [0,1]
+         * because Thompson sampling needs a Bernoulli-scale signal. */
+        double reward = 0.5 * (double)new_edges + 0.15 * (double)new_buckets;
+        if (reward > 1.0) reward = 1.0;
+
+        uint8_t hit = (new_edges || new_buckets) ? 1 : 0;
+        hit_ring_sum -= hit_ring[hit_ring_pos];
+        hit_ring[hit_ring_pos] = hit;
+        hit_ring_sum += hit;
+        hit_ring_pos = (hit_ring_pos + 1) & 255;
+
+        sched_reward(op_counts, total_edits, reward, &ctx);
+
         uint64_t t = now_ms();
+        /* Unconditional: trace_row also accumulates the operator histograms
+         * that the end-of-run adaptation metric is computed from, and it
+         * cheaply returns before formatting anything when --trace is off. */
+        trace_row(execs, t - start, op_counts, total_edits, len, res_name,
+                      new_edges, new_buckets, reward, edges_found, corpus_len,
+                      &ctx);
+        trace_cov(execs, t - start, edges_found, corpus_len, crash_count);
+
         if (t - last_ui >= 500) {
             double secs = (t - start) / 1000.0;
             fprintf(stderr,
                 "\r[*] execs=%llu (%.0f/s) corpus=%zu edges=%u crashes=%zu hangs=%zu   ",
                 (unsigned long long)execs, execs / (secs > 0 ? secs : 1),
-                corpus_len, count_nonzero_virgin(), crash_count, hang_count);
+                corpus_len, edges_found, crash_count, hang_count);
             fflush(stderr);
             last_ui = t;
         }
+
+        if (max_execs && execs >= max_execs) break;
+        if (max_secs && (t - start) >= max_secs * 1000) break;
     }
+
+    fprintf(stderr, "\n");
+    trace_close(execs, now_ms() - start, edges_found, corpus_len,
+                crash_count, hang_count, &ctx);
     return 0;
 }

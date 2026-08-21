@@ -1,0 +1,5 @@
+{"summary":true,"scheduler":"baseline","seed":2,"target":"build/cjson_target_bench","execs":30000,"t_ms":12386,"edges":308,"corpus":346,"crashes":0,"hangs":0,"tv_early_vs_late":0.00821,"tv_early_vs_all":0.00465,"tv_early_vs_posterior":0.00450,"tv_vs_handweights":0.00091,
+ "op_share_early":{"bitflip":0.08943,"byteset":0.09114,"byteadd":0.09104,"int8":0.09174,"int16":0.08970,"int32":0.09003,"delete":0.18283,"clone":0.18089,"memset":0.09321},
+ "op_share_late":{"bitflip":0.08759,"byteset":0.09496,"byteadd":0.09234,"int8":0.09196,"int16":0.08825,"int32":0.08578,"delete":0.18331,"clone":0.18326,"memset":0.09253},
+ "op_share_all":{"bitflip":0.09109,"byteset":0.09079,"byteadd":0.09048,"int8":0.09090,"int16":0.09066,"int32":0.09081,"delete":0.18217,"clone":0.18213,"memset":0.09097},
+ "op_posterior_mean":{"bitflip":0.09091,"byteset":0.09091,"byteadd":0.09091,"int8":0.09091,"int16":0.09091,"int32":0.09091,"delete":0.18182,"clone":0.18182,"memset":0.09091}}
