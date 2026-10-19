@@ -14,6 +14,8 @@ COV_FLAGS = -fsanitize-coverage=trace-pc-guard
 ASAN      = -fsanitize=address
 
 BUILD = build
+PYTHON ?= python3
+DIFF_FLAGS = -std=c11 -Wall -Wextra -Werror -g -O1 -fno-omit-frame-pointer $(ASAN)
 
 .PHONY: all run run-zlib clean
 all: $(BUILD)/mk-fuzz $(BUILD)/toy_parser $(BUILD)/zlib_target
@@ -44,3 +46,18 @@ run-zlib: all
 
 clean:
 	rm -rf $(BUILD) out out_zlib
+
+# Portable differential targets do not depend on the Linux fork-server runtime.
+.PHONY: differential replay-differential test-differential
+differential: $(BUILD)/parameters_legacy $(BUILD)/parameters_migrated
+
+$(BUILD)/parameters_%: targets/parameters_%.c targets/parameters_main.c targets/parameters.h | $(BUILD)
+	$(CC) $(CFLAGS) $(DIFF_FLAGS) -o $@ targets/parameters_$*.c targets/parameters_main.c
+
+replay-differential: differential
+	$(PYTHON) differential/replay.py --legacy $(BUILD)/parameters_legacy \
+	  --migrated $(BUILD)/parameters_migrated --fixtures tests/fixtures/parameters.json \
+	  --fixtures tests/fixtures/parameters_boundaries.json
+
+test-differential: replay-differential
+	$(PYTHON) -u -m unittest discover -s tests -p 'test_differential.py' -v

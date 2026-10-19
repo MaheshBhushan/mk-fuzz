@@ -1,0 +1,114 @@
+[
+  {
+    "name": "count/below-min",
+    "hex": "636f756e743d2d31",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "count/min",
+    "hex": "636f756e743d30",
+    "expected": {
+      "status": "ok",
+      "count": 0,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "count/above-min",
+    "hex": "636f756e743d31",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "count/below-max",
+    "hex": "636f756e743d3635353334",
+    "expected": {
+      "status": "ok",
+      "count": 65534,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "count/max",
+    "hex": "636f756e743d3635353335",
+    "expected": {
+      "status": "ok",
+      "count": 65535,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "count/above-max",
+    "hex": "636f756e743d3635353336",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  },
+  {
+    "name": "offset/below-min",
+    "hex": "6f66667365743d2d32313437343833363439",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  },
+  {
+    "name": "offset/min",
+    "hex": "6f66667365743d2d32313437343833363438",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": -2147483648,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "offset/above-min",
+    "hex": "6f66667365743d2d32313437343833363437",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": -2147483647,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "offset/below-max",
+    "hex": "6f66667365743d32313437343833363436",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": 2147483646,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "offset/max",
+    "hex": "6f66667365743d32313437343833363437",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": 2147483647,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "offset/above-max",
+    "hex": "6f66667365743d32313437343833363438",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  }
+]

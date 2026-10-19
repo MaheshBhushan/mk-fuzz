@@ -83,6 +83,76 @@ symbolic/venv/bin/python symbolic/symex.py --emit out/queue
 
 `./demo.sh` runs the whole pipeline end to end.
 
+## Cross-platform parameter-parser differential harness
+
+The portable harness runs the same binary fixtures against two independent C
+implementations. `targets/parameters_legacy.c` uses bounded C strings and
+`strtoll`; `targets/parameters_migrated.c` uses byte slices and checked
+fixed-width arithmetic. These are demonstration parameter parsers added for
+migration testing. The existing toy container parser keeps its planted bugs.
+
+```sh
+make CC=clang test-differential
+```
+
+This builds both parsers with AddressSanitizer, compares the shared fixtures
+against explicit expected results, and runs deterministic mutations plus harness
+regression tests. Python 3.9+ runs the driver without third-party dependencies.
+The `Differential parser replay` GitHub Actions workflow runs this check on
+Linux and macOS. The differential targets do not link the Linux fork server.
+
+The example parameter contract is:
+
+| Field | Accepted value | Default |
+|---|---|---|
+| `count` | Decimal digits, 0 through 65535 | 1 |
+| `offset` | Decimal digits with an optional `-`, -2147483648 through 2147483647 | 0 |
+| `mode` | `safe` or `fast` | `safe` |
+
+An empty input uses defaults. Other inputs contain `key=value` fields separated
+by `;`. Keys are case sensitive. Leading zeros are accepted. Whitespace, `+`,
+embedded NULs, empty fields, and repeated keys are rejected. Input length is
+limited to 256 bytes. Size and NUL checks precede field parsing. Each field is
+checked for syntax, known key, duplicate key, then value syntax and range.
+The first failing check determines the rejection reason. Numeric syntax is
+checked completely before range conversion. This keeps huge numbers with
+trailing junk consistent across implementations and integer widths.
+
+Each parser reads raw bytes from stdin and writes one JSON object. Exit 0 means
+acceptance; exit 2 means rejection. The driver compares all accepted field values
+and rejection reasons. Crashes, timeouts, stderr diagnostics, invalid protocol,
+and unexpected exits always fail, including identical failures in both binaries.
+Golden fixtures catch shared mistakes in both implementations.
+
+Failures retain SHA-256-named `.bin` inputs and `.json` observations in
+`out_diff/counterexamples/`. Metadata includes commands, platform, raw stdout and
+stderr as hex, exit codes, and the expected result when available. Repeated
+inputs preserve their first observation. CI uploads counterexamples per platform.
+Copy those files to another platform and replay them against its native binaries:
+
+```sh
+python3 differential/replay.py --legacy build/parameters_legacy \
+  --migrated build/parameters_migrated --replay out_diff/counterexamples \
+  --out out_diff/replayed
+```
+
+`--fixtures PATH` accepts additional JSON fixture arrays with `name`, `hex`, and
+`expected` fields. `--replay DIR` consumes saved `.bin` files and their optional
+expected-result metadata. Each process has a configurable timeout of one second
+by default. Empty fixture sets and missing replay directories fail the command.
+Other parser executables can use the same JSON/exit protocol as adapters.
+
+Z3 generates the committed integer-boundary fixtures. Ordinary replay uses those
+fixtures directly; CI also verifies them against fresh solver results:
+
+```sh
+# Reuse the symbolic engine's environment from the setup above.
+symbolic/venv/bin/python symbolic/parameter_boundaries.py \
+  --check tests/fixtures/parameters_boundaries.json
+# Regenerate after deliberately changing the parameter contract:
+symbolic/venv/bin/python symbolic/parameter_boundaries.py > tests/fixtures/parameters_boundaries.json
+```
+
 ## Results (this machine)
 
 - **Toy target:** the fuzzer defeats the 4-byte `MKF1` magic gate purely from

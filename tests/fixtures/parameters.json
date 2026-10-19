@@ -1,0 +1,276 @@
+[
+  {
+    "name": "defaults",
+    "hex": "",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "all-fields",
+    "hex": "6d6f64653d666173743b6f66667365743d2d31373b636f756e743d3432",
+    "expected": {
+      "status": "ok",
+      "count": 42,
+      "offset": -17,
+      "mode": "fast"
+    }
+  },
+  {
+    "name": "leading-zeros",
+    "hex": "636f756e743d30303031323b6f66667365743d2d303030",
+    "expected": {
+      "status": "ok",
+      "count": 12,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "reordered",
+    "hex": "6f66667365743d32333b6d6f64653d736166653b636f756e743d39",
+    "expected": {
+      "status": "ok",
+      "count": 9,
+      "offset": 23,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "maximum-input",
+    "hex": "636f756e743d30303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303031",
+    "expected": {
+      "status": "ok",
+      "count": 1,
+      "offset": 0,
+      "mode": "safe"
+    }
+  },
+  {
+    "name": "over-maximum-input",
+    "hex": "636f756e743d3030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303031",
+    "expected": {
+      "status": "reject",
+      "reason": "size"
+    }
+  },
+  {
+    "name": "size-before-syntax",
+    "hex": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "expected": {
+      "status": "reject",
+      "reason": "size"
+    }
+  },
+  {
+    "name": "unknown-key",
+    "hex": "746872656164733d34",
+    "expected": {
+      "status": "reject",
+      "reason": "unknown"
+    }
+  },
+  {
+    "name": "key-case",
+    "hex": "436f756e743d34",
+    "expected": {
+      "status": "reject",
+      "reason": "unknown"
+    }
+  },
+  {
+    "name": "duplicate",
+    "hex": "636f756e743d313b636f756e743d32",
+    "expected": {
+      "status": "reject",
+      "reason": "duplicate"
+    }
+  },
+  {
+    "name": "duplicate-before-value",
+    "hex": "6f66667365743d313b6f66667365743d616263",
+    "expected": {
+      "status": "reject",
+      "reason": "duplicate"
+    }
+  },
+  {
+    "name": "duplicate-mode",
+    "hex": "6d6f64653d736166653b6d6f64653d66617374",
+    "expected": {
+      "status": "reject",
+      "reason": "duplicate"
+    }
+  },
+  {
+    "name": "missing-equals",
+    "hex": "636f756e74",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "empty-key",
+    "hex": "3d31",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "empty-value",
+    "hex": "636f756e743d",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "extra-equals",
+    "hex": "636f756e743d313d32",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "leading-separator",
+    "hex": "3b636f756e743d31",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "trailing-separator",
+    "hex": "636f756e743d313b",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "empty-field",
+    "hex": "636f756e743d313b3b6f66667365743d32",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "space",
+    "hex": "636f756e743d2031",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "newline",
+    "hex": "636f756e743d310a",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "plus",
+    "hex": "6f66667365743d2b31",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "negative-count",
+    "hex": "636f756e743d2d30",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "bare-minus",
+    "hex": "6f66667365743d2d",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "hex",
+    "hex": "636f756e743d30786666",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "bad-mode",
+    "hex": "6d6f64653d46415354",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "embedded-nul",
+    "hex": "636f756e743d31003b6d6f64653d66617374",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "high-byte",
+    "hex": "636f756e743dff",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "huge-integer",
+    "hex": "6f66667365743d393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  },
+  {
+    "name": "huge-integer-with-junk",
+    "hex": "6f66667365743d39393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393939393978",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  },
+  {
+    "name": "long-long-min",
+    "hex": "6f66667365743d2d39323233333732303336383534373735383038",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  },
+  {
+    "name": "long-long-overflow",
+    "hex": "6f66667365743d39323233333732303336383534373735383038",
+    "expected": {
+      "status": "reject",
+      "reason": "range"
+    }
+  },
+  {
+    "name": "first-error",
+    "hex": "6d6f64653d6261643b636f756e743d3635353336",
+    "expected": {
+      "status": "reject",
+      "reason": "syntax"
+    }
+  }
+]

@@ -4,3 +4,5 @@ out_zlib/
 symbolic/venv/
 *.o
 .cur_input
+out_diff/
+__pycache__/
