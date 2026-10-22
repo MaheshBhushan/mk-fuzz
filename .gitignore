@@ -11,3 +11,8 @@ third_party/cjson/
 # committed as evidence. The bug gate's saved crash corpora are not.
 results/buggate/
 results_smoke/
+
+# Local secrets
+.env
+.env.*
+!.env.example
