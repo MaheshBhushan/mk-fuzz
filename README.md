@@ -167,6 +167,24 @@ symbolic/venv/bin/python symbolic/parameter_boundaries.py > tests/fixtures/param
   fork server. No crash (zlib is hardened) — the point is that pointing the
   fuzzer at a real binary is a one-file harness change.
 
+## Crash clustering
+
+`triage/cluster.py` collapses duplicate crashes into one report per root cause.
+It replays every file in a crash directory against the target, parses the ASan
+report into a fault kind plus the innermost application frames (sanitizer,
+libc, and runtime frames are dropped), and featurises each trace with TF-IDF
+over frame, depth, and caller-to-callee tokens. scikit-learn's
+`AgglomerativeClustering` groups traces of the same fault kind by cosine
+distance (`--threshold`, default 0.5). Each cluster gets one repro, shrunk by
+delta debugging while its trace stays identical.
+
+```bash
+python -m pip install scikit-learn
+make run                    # fill out/crashes
+make triage                 # writes out/triage/{README.md,clusters.json,cluster_NNN/repro}
+make test-triage            # unit tests + end-to-end on the toy target's two bugs
+```
+
 ## Roadmap (what a full build adds next)
 
 1. **Dictionaries + structured seeds** to push past format checks in real libs.
@@ -174,8 +192,7 @@ symbolic/venv/bin/python symbolic/parameter_boundaries.py > tests/fixtures/param
    for ASan-heavy targets; the toy target is I/O/teardown bound today.
 3. **CmpLog / input-to-state** (RedQueen-style) — in practice often beats
    symbolic execution for magic-byte and checksum gates.
-4. **Corpus minimisation** (`afl-cmin`/`tmin` equivalents) and crash triage
-   with stack-hash bucketing.
+4. **Corpus minimisation** (`afl-cmin` equivalent).
 5. **Deeper symbolic engine:** lift real LLVM IR (via `clang -emit-llvm`) instead
    of a hand-written IR, model memory/symbolic pointers, and drive it from the
    fuzzer's stuck inputs automatically.

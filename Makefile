@@ -61,3 +61,11 @@ replay-differential: differential
 
 test-differential: replay-differential
 	$(PYTHON) -u -m unittest discover -s tests -p 'test_differential.py' -v
+
+# Crash triage: cluster out/crashes by stack trace (needs scikit-learn).
+.PHONY: triage test-triage
+triage: $(BUILD)/toy_parser
+	$(PYTHON) triage/cluster.py -i out/crashes -o out/triage -- $(BUILD)/toy_parser
+
+test-triage: $(BUILD)/toy_parser
+	$(PYTHON) -u -m unittest discover -s tests -p 'test_triage.py' -v
